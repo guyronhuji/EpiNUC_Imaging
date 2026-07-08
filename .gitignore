@@ -11,6 +11,7 @@ demo_output/
 
 # Result tables produced by a run
 compare_*.csv
+compare_*.txt
 per_image_counts.csv
 cumulative_new_counts.csv
 colocalization_events.csv
