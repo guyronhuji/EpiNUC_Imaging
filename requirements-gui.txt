@@ -1,0 +1,11 @@
+# EPINUC QA GUI — extra dependency (on top of the pipeline's own requirements)
+streamlit>=1.30
+
+# Run with:
+#   streamlit run epinuc_gui.py
+#
+# Then in the browser: pick a sample / timepoint / FOV, inspect the tabs, tune the
+# per-channel k sliders, and click "Save" to write epinuc_config.json. For the production
+# run, load those tuned thresholds:
+#   import epinuc_colocalization as ep
+#   ep.run_samples([1,2,3], data_dir="T50_20260225", config_path="epinuc_config.json")

@@ -1,0 +1,36 @@
+# Raw imaging data and analysis outputs — never commit (>130 GB, and not ours to publish)
+T50_20260225/
+KAPLAN/
+per_run_output/
+analysis_output*/
+demo_output/
+*.nd2
+*.tif
+*.h5
+*.cpproj
+
+# Result tables produced by a run
+compare_*.csv
+per_image_counts.csv
+cumulative_new_counts.csv
+colocalization_events.csv
+spot_detections.csv
+bead_detections.csv
+registration_transforms.csv
+time_aligned_spots.csv
+processing_log.csv
+*_summary.csv
+results_format.csv
+results_annotated.csv
+results_by_antibody.csv
+
+# Scratch
+Untitled.ipynb
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+
+# OS / editor
+.DS_Store
+.venv/
+venv/
