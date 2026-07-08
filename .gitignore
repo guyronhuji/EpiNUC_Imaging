@@ -25,6 +25,12 @@ results_format.csv
 results_annotated.csv
 results_by_antibody.csv
 
+# Notebooks kept locally but not shipped: the repo carries one demo per data path
+# (demo_epinuc_colocalization.ipynb for ND2, demo_epinuc_tiff.ipynb for TIF).
+ND2_nucleosome_PTM_colocalization.ipynb
+epinuc_colocalization_per_fov.ipynb
+epinuc_tiff_imaging.ipynb
+
 # Scratch
 Untitled.ipynb
 .ipynb_checkpoints/

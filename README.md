@@ -63,11 +63,12 @@ ep.run_samples([1, 2, 3], data_dir="T50_20260225",
                output_dir="analysis_output", config_path="epinuc_config.json")
 ```
 
-### `ND2_nucleosome_PTM_colocalization.py` / `.ipynb` — annotated notebook twin
-The original, heavily-commented notebook version of the same pipeline, in jupytext "percent"
-(`# %%`) format, with a paired `.ipynb`. It contains the same analysis logic as
-`epinuc_colocalization.py` (the two are near-duplicates) plus a self-test block at the bottom.
-Good for reading the step-by-step explanation of the method.
+### `ND2_nucleosome_PTM_colocalization.py` — annotated pipeline twin
+The original, heavily-commented version of the same pipeline, in jupytext "percent" (`# %%`)
+format. It contains the same analysis logic as `epinuc_colocalization.py` (the two are
+near-duplicates) plus a self-test block at the bottom. Good for reading the step-by-step
+explanation of the method. (Its paired `.ipynb`, and the per-FOV exploration notebook, are kept
+locally but not committed — the repo ships one demo per data path, see below.)
 
 > **Keep in sync:** `epinuc_colocalization.py` and `ND2_nucleosome_PTM_colocalization.py` share
 > the same core functions (`colocalize`, `update_cumulative`, the count/column schemas). A change
@@ -84,13 +85,14 @@ run. Reuses the pipeline's functions — no analysis logic is duplicated here.
 streamlit run epinuc_gui.py
 ```
 
-### `demo_epinuc_colocalization.ipynb` — demo driver
-A short notebook showing how to call `ep.run_samples(...)` for one sample or several, using
-`scenes=range(3)` for a fast test or `scenes=None` for the full run.
+### Demo notebooks — one per data path
+Short, runnable starting points. Both take a fast subset first (`scenes=range(3)` /
+`scenes=[0, 1]`) and leave the full run commented out.
 
-### `Untitled.ipynb` — scratch
-Exploratory scratch notebook (basic `nd2.imread` + channel normalization). Not part of the
-pipeline.
+| Notebook | Data | Shows |
+|---|---|---|
+| `demo_epinuc_colocalization.ipynb` | ND2 | `ep.run_samples(...)` for one sample or several. |
+| `demo_epinuc_tiff.ipynb` | TIF | Index a run, inspect the lasers, assign **Channel → role**, run one lane, then the "Results Format" table. |
 
 ---
 
@@ -223,7 +225,7 @@ see [Channel map — TIF](#channel-map--tif).
 | `epinuc_tiff_loader.py` | TIF → pipeline adapter (parser, `TiffCycleAccessor`, artifact masks, multiprocessing). |
 | `epinuc_tiff_gui.py` | Streamlit QA & tuning GUI, navigated **run → lane → cycle → position**, with a *Channel → role* picker. |
 | `epinuc_tiff_cli.py` | Headless runner that consumes the GUI-tuned config; `--channel-map` overrides the laser assignment. |
-| `epinuc_tiff_imaging.ipynb` | Driver notebook: inventory, diagnostics/overlays, full run, results table. |
+| `demo_epinuc_tiff.ipynb` | Demo notebook: index a run, pick the channels, quick one-lane run, results table. |
 
 ### The workflow
 
