@@ -9,6 +9,14 @@ demo_output/
 *.h5
 *.cpproj
 
+# Flat-field corrected image trees + their calibration sidecars (regenerable via
+# epinuc_psf_correct.py --flat-field; the corrected TIF trees are multi-GB)
+corrected/
+*_flatfield/
+psf_report.csv
+# Large binary flat-field arrays under the report figures (regenerable)
+Correction_Rep/figs/calib_*/
+
 # Result tables produced by a run
 compare_*.csv
 compare_*.txt

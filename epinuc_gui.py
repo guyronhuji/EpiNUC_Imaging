@@ -143,7 +143,7 @@ if "seeded" not in st.session_state:
         "max_beads": int(d["MAX_TRUSTED_BEADS"]),
         "excl_beads": bool(d["EXCLUDE_BEADS_FROM_SPOTS"]),
         "mask_beads_bg": bool(d["MASK_BEADS_BEFORE_BACKGROUND"]),
-        "bead_method": str(d.get("BEAD_DETECTION_METHOD", "fast")),
+        "bead_method": str(d.get("BEAD_DETECTION_METHOD", "multichannel")),
         "bead_snr": float(d.get("BEAD_DETECTION_SNR", 150.0)),
         "seeded": True,
     })
