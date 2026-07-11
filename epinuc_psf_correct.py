@@ -728,11 +728,10 @@ def photon_transfer_bias(stack: np.ndarray, tile: int = _FLAT_TILE, nbin: int = 
     valid)`` -- ``valid`` is False when the cloud never nears the floor (dense-signal channels like
     green), i.e. the extrapolated bias lands at/above the dimmest tile.
 
-    The per-tile variance is estimated from ADJACENT-PIXEL DIFFERENCES, not the raw spatial variance:
-    a steep vignette (up to ~47%) puts a real illumination gradient across a 48 px tile, and that
-    gradient would swamp the shot-noise signal in a plain ``tile.var``.  A 1-px difference cancels
-    the smooth gradient, and its MAD is robust to the odd bead pixel, so what survives is the shot
-    noise -- exactly the quantity photon transfer needs.
+    Per-tile variance comes from adjacent-pixel differences, not the raw spatial variance: a steep
+    vignette (up to ~47%) leaves a real illumination gradient across a 48 px tile that would swamp
+    the shot noise in a plain ``tile.var``. A 1-px difference cancels the smooth gradient, and its
+    MAD ignores the odd bead pixel, leaving the shot noise.
     """
     n, h, w = stack.shape
     H, W = (h // tile) * tile, (w // tile) * tile

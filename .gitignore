@@ -14,8 +14,11 @@ demo_output/
 corrected/
 *_flatfield/
 psf_report.csv
-# Large binary flat-field arrays under the report figures (regenerable)
-Correction_Rep/figs/calib_*/
+
+# Repo carries code + demo notebooks only. Configs (run-specific, tuned locally) and the
+# correction report (generated) live locally but are not tracked.
+*.json
+Correction_Rep/
 
 # Result tables produced by a run
 compare_*.csv

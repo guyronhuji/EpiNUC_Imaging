@@ -85,6 +85,41 @@ run. Reuses the pipeline's functions — no analysis logic is duplicated here.
 streamlit run epinuc_gui.py
 ```
 
+### `epinuc_psf_correct.py` — standalone image correction & QC (TIF)
+A self-contained tool (needs only numpy/scipy/tifffile) that reads raw EpiVision TIFs and either
+reports per-image quality or writes corrected TIFs to a mirrored folder. It never touches the
+pipeline — you point the pipeline at the corrected folder afterwards.
+
+It does two separate jobs:
+
+- **QC / measurement** (`--dry-run`, or `--measure-only` for speed): measures saturation, the
+  half-light PSF radius, bead count, recovered stage drift, and the instrument's own focus flags
+  from each image's fiducial beads, and writes them to a CSV. (This is also where the "the TIF PSF
+  is not actually defocused" finding lives — see the module docstring.)
+- **Flat-field correction** (`--flat-field`): builds a per-mode (R/G/B) flat field from the run's
+  own frames plus an additive bias measured by photon transfer, then writes corrected `uint16`
+  TIFs. Corrects every channel, keeps the filenames and XMP metadata, and puts the calibration in a
+  sibling `<out>_flatfield/` folder so `--out` stays a clean TIF mirror.
+
+```bash
+# preview the per-mode bias/flat, write nothing
+python epinuc_psf_correct.py --in /Volumes/scBC/EpiVision/Images/NUC388 --flat-field --dry-run
+
+# write corrected TIFs, then point the pipeline at ./corrected/NUC388
+python epinuc_psf_correct.py --in /Volumes/scBC/EpiVision/Images/NUC388 \
+    --flat-field --out ./corrected/NUC388
+```
+
+```python
+import epinuc_psf_correct as pc
+cal = pc.build_flatfield(files, max_frames=80)      # {"R": Calib, "G": Calib, "B": Calib}
+fixed = pc.apply_flatfield(raw_image, cal["R"])     # bias-subtract, divide the vignette
+```
+
+> On the current data the flat field is *safe but marginal*: it leaves the final colocalization and
+> the registration method mix essentially unchanged. Its value is uniform-looking images, not better
+> numbers — the real limiters (cross-cycle drift, saturation) are acquisition issues it can't fix.
+
 ### Demo notebooks — one per data path
 Short, runnable starting points. Both take a fast subset first (`scenes=range(3)` /
 `scenes=[0, 1]`) and leave the full run commented out.
@@ -105,6 +140,9 @@ Short, runnable starting points. Both take a fast subset first (`scenes=range(3)
   consumed via `run_samples(..., config_path="epinuc_config.json")` or `--config`.
   One file serves both paths: saving from the ND2 GUI preserves `TIF_CHANNEL_MAP`, and saving from
   the TIF GUI preserves `CHANNEL_MAP`.
+  It is a local, run-specific file and is **not tracked in the repo** (the code's built-in defaults
+  in `epinuc_colocalization.py` are the shipped settings); generate your own from either GUI's
+  **Save**, or pass one you already have via `--config`.
 - **`requirements-gui.txt`** — the extra dependency for the GUI (`streamlit`) on top of the
   pipeline's own requirements (numpy, pandas, scipy, scikit-image, matplotlib, the `nd2`
   reader; optional `opencv`/`tqdm` accelerators).
@@ -298,3 +336,50 @@ resolution table (the TIF analogue of `--check-channels`).
   so cumulative new-only counting is unaffected — results are bit-identical to a serial run.
 - `TIME_COARSE_ALIGN` is forced off: the fixed green template already puts every cycle in one
   common frame, so across-cycle alignment must be the identity.
+
+---
+
+## API reference
+
+The functions and classes you'd actually import. Conventional aliases: `import epinuc_colocalization
+as ep`, `import epinuc_tiff_loader as tl`, `import epinuc_psf_correct as pc`.
+
+### `epinuc_colocalization` (`ep`) — analysis core
+
+| Call | Does |
+|------|------|
+| `run_samples(samples, data_dir=…, output_dir=…, config_path=…, channel_map=…, n_jobs=…)` | Run whole samples end-to-end; writes result CSVs, returns a summary DataFrame. |
+| `process_sample(files_ordered, sample_id=…, scenes=…)` | One sample, serial. |
+| `process_sample_parallel(files_ordered, …, n_jobs=…)` | One sample, FOV-parallel (bit-identical to serial). |
+| `detect_beads_multichannel(images, file, scene, time, sigma=…, snr=…)` | `{role: bead DataFrame}` — fiducials bright in every channel (per-pixel min of z-maps). |
+| `detect_spots(img, file, scene, time, channel_type, transform=…, bead_yx=…, artifact_mask=…)` | Diffraction-limited spots in one channel → `SPOT_COLUMNS` DataFrame. |
+| `confirmed_bead_coords([nuc, r, b], tol=…, max_trusted=…)` | Cross-channel-confirmed bead `(y, x)` array (drops flooded channels). |
+| `estimate_channel_transform(ref_beads, mov_beads, ref_img, mov_img, mode=…)` | `ChannelTransform` — bead-based, else phase-correlation, else identity. |
+| `colocalize(nuc, r, b, file, scene, time, radius=…)` | `(events_df, counts)` for one image. |
+| `get_config()` / `apply_config(cfg)` / `load_config(path)` / `save_config(path)` | Read / set / load-from-JSON / write the tuned parameter block. |
+
+### `epinuc_tiff_loader` (`tl`) — TIF → pipeline adapter
+
+| Call | Does |
+|------|------|
+| `index_run(run_dir)` | DataFrame indexing one run's TIFs (parses lane / pos / cycle / laser). |
+| `assign_roles(run_index, channel_map=…)` | Add the `role` column from a laser→role map. |
+| `fov_planes(run_index, lane, cycle, scene)` | `{role: 2D image or None}` for one FOV (nucleosome resolves to the cycle-1 template). |
+| `configure_pipeline(pixel_size_um=…, tif_channel_map=…)` | Point `ep` at the TIF conventions (identity channel map, no coarse time vote). |
+| `current_tif_channel_map()` / `check_tif_channel_map(idx, cmap)` / `validate_tif_channel_map(cmap)` | Inspect / verify the laser→role assignment. |
+| `lanes_in_run(idx)` | Sorted `chN` lane keys present. |
+| `save_config(path)` | Write the config (mirrors `ep.save_config`, preserving the other path's channel map). |
+
+### `epinuc_psf_correct` (`pc`) — flat-field & QC
+
+| Call | Does |
+|------|------|
+| `build_flatfield(files, max_frames)` | `{mode: Calib}` — per-mode median flat + photon-transfer bias (green transfers the R/B bias when its own fit is unreliable). |
+| `apply_flatfield(img, cal)` | `(img - bias) / gain_norm` → corrected `float32` (bias subtracted, vignette divided). |
+| `Calib(mode, flat, bias, gain, valid, n)` | Calibration for one mode; `.gain_map()` returns the cached normalized gain. |
+| `photon_transfer_bias(stack)` | `(bias, gain_e_per_dn, valid)` from tile variance-vs-mean. |
+| `save_calibration(cal, dir)` / `load_calibration(dir)` | Persist / reuse a calibration (the `<out>_flatfield/` folder; reuse with `--flat-load`). |
+| `measure_psf(img, coords)` / `find_fiducials(images)` | PSF (half-light radius) and cross-channel fiducial detection, for the QC path. |
+| `parse_tif_name(name)` / `read_tif(path)` | Filename fields; `(float32 image, XMP bytes)` with SMB-dropout retry. |
+
+Run the tool from the shell with `python epinuc_psf_correct.py --help`.
