@@ -43,7 +43,8 @@ uv run python epinuc_psf_correct.py --in .../NUC388 --flat-field --out ./correct
 > `export UV_PROJECT_ENVIRONMENT=~/.venvs/epinuc` before `uv sync`.
 
 No uv? Plain pip works too, just without the pinning:
-`pip install numpy pandas scipy scikit-image matplotlib tifffile nd2 streamlit tqdm`.
+`pip install numpy pandas scipy scikit-image matplotlib tifffile nd2 xarray "dask[array]" joblib h5py streamlit tqdm`
+(add `opencv-python` for the optional accelerator).
 
 ---
 

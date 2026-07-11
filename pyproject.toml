@@ -12,6 +12,10 @@ dependencies = [
     "matplotlib",
     "tifffile",
     "nd2",
+    "xarray",       # ND2Accessor.to_xarray(...) view of the ND2 file
+    "dask[array]",  # backs to_xarray(delayed=True) — lazy, one plane at a time
+    "joblib",       # loky-backed FOV parallelism (process_sample_parallel)
+    "h5py",         # reads the CellProfiler Batch_data.h5 for sample names
     "streamlit",
     "tqdm",
 ]
