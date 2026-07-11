@@ -1,0 +1,27 @@
+[project]
+name = "epinuc-imaging"
+version = "0.1.0"
+description = "EPINUC single-molecule nucleosome/PTM colocalization imaging (ND2 + EpiVision TIF)."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-image",
+    "matplotlib",
+    "tifffile",
+    "nd2",
+    "streamlit",
+    "tqdm",
+]
+
+# Optional OpenCV background/blur backend — faster on large fields, but a heavy wheel.
+# Install with:  uv sync --extra accel
+[project.optional-dependencies]
+accel = ["opencv-python"]
+
+# This repo is a set of scripts, not an installable package, so uv manages the
+# environment without trying to build/install the project itself.
+[tool.uv]
+package = false

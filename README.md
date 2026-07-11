@@ -19,6 +19,34 @@ the radius, independent of the nucleosome/green channel).
 
 ---
 
+## Install & run
+
+Dependencies are pinned with [uv](https://docs.astral.sh/uv/), so one command reproduces the exact,
+tested environment (Python 3.11):
+
+```bash
+uv sync                 # build the env from uv.lock
+uv sync --extra accel   # also install the optional OpenCV background backend
+```
+
+Run everything through `uv run` — it uses the project's environment, no manual activation:
+
+```bash
+uv run streamlit run epinuc_tiff_gui.py     # TIF QA / tuning GUI
+uv run streamlit run epinuc_gui.py          # ND2 QA / tuning GUI
+uv run python epinuc_tiff_cli.py --config epinuc_config.json --output per_run_output
+uv run python epinuc_psf_correct.py --in .../NUC388 --flat-field --out ./corrected/NUC388
+```
+
+> **In a Dropbox/OneDrive folder?** Keep the virtualenv out of the synced tree, or it will sync
+> thousands of files. Either tell the sync client to ignore `.venv/`, or point uv elsewhere:
+> `export UV_PROJECT_ENVIRONMENT=~/.venvs/epinuc` before `uv sync`.
+
+No uv? Plain pip works too, just without the pinning:
+`pip install numpy pandas scipy scikit-image matplotlib tifffile nd2 streamlit tqdm`.
+
+---
+
 ## Which version do I want?
 
 One analysis core (`epinuc_colocalization.py`) with **two front ends**, chosen by how the images
