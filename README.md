@@ -59,8 +59,8 @@ the GUI's navigation, and the way you pick channels differ.
 | Data | Nikon `.nd2` (all FOVs/times/channels in one file) | EpiVision instrument: flat folder of single-plane TIFs |
 | Where | e.g. `T50_20260225/TS###_*.nd2` | `/Volumes/scBC/EpiVision/Images/NUC###/` |
 | Loader | `epinuc_colocalization.py` (`ND2Accessor`) | `epinuc_tiff_loader.py` (`TiffCycleAccessor`) |
-| GUI | `streamlit run epinuc_gui.py` | `streamlit run epinuc_tiff_gui.py` |
-| Headless | `python epinuc_colocalization.py …` | `python epinuc_tiff_cli.py …` |
+| GUI | `uv run streamlit run epinuc_gui.py` | `uv run streamlit run epinuc_tiff_gui.py` |
+| Headless | `uv run python epinuc_colocalization.py …` | `uv run python epinuc_tiff_cli.py …` |
 | Navigate by | sample → timepoint (file) → FOV | run → lane → cycle → FOV |
 | Time points are | separate ND2 files | antibody **cycles** (green template imaged once, at cycle 1) |
 | **A "channel" is** | an ND2 metadata channel name (`"561 VF zyla Azide"`) | the **laser letter** in the filename (`G` / `R` / `B`) |
@@ -111,7 +111,7 @@ run. Reuses the pipeline's functions — no analysis logic is duplicated here.
 (For TIF data use `epinuc_tiff_gui.py` instead — see below.)
 
 ```
-streamlit run epinuc_gui.py
+uv run streamlit run epinuc_gui.py
 ```
 
 ### `epinuc_psf_correct.py` — standalone image correction & QC (TIF)
@@ -132,10 +132,10 @@ It does two separate jobs:
 
 ```bash
 # preview the per-mode bias/flat, write nothing
-python epinuc_psf_correct.py --in /Volumes/scBC/EpiVision/Images/NUC388 --flat-field --dry-run
+uv run python epinuc_psf_correct.py --in /Volumes/scBC/EpiVision/Images/NUC388 --flat-field --dry-run
 
 # write corrected TIFs, then point the pipeline at ./corrected/NUC388
-python epinuc_psf_correct.py --in /Volumes/scBC/EpiVision/Images/NUC388 \
+uv run python epinuc_psf_correct.py --in /Volumes/scBC/EpiVision/Images/NUC388 \
     --flat-field --out ./corrected/NUC388
 ```
 
@@ -211,13 +211,13 @@ Result CSVs written by a run:
 1. Put ND2 files in a data folder (e.g. `T50_20260225/`).
 2. **Check the channels resolve** (see below):
    ```bash
-   python epinuc_colocalization.py 1 --data-dir T50_20260225 --check-channels
+   uv run python epinuc_colocalization.py 1 --data-dir T50_20260225 --check-channels
    ```
-3. `streamlit run epinuc_gui.py` → tune thresholds on a few FOVs → **Save** to `epinuc_config.json`.
+3. `uv run streamlit run epinuc_gui.py` → tune thresholds on a few FOVs → **Save** to `epinuc_config.json`.
 4. Run the pipeline for the full set — **CLI** (the config carries every tuned parameter
    *including* `CHANNEL_MAP`):
    ```bash
-   python epinuc_colocalization.py 1 2 3 \
+   uv run python epinuc_colocalization.py 1 2 3 \
        --data-dir T50_20260225 --output-dir analysis_output \
        --config epinuc_config.json --n-jobs -2
    ```
@@ -298,15 +298,15 @@ see [Channel map — TIF](#channel-map--tif).
 
 ```bash
 # 1. Check which lasers the run actually contains.
-python epinuc_tiff_cli.py --runs NUC388 --list
+uv run python epinuc_tiff_cli.py --runs NUC388 --list
 
 # 2. Tune interactively — assign each role to a laser (Channel → role), then the sliders for
 #    spot k, coloc radius, bead + blob/streak artifact knobs. Watch the overlays update,
 #    then press "💾 Save".
-streamlit run epinuc_tiff_gui.py            # -> writes epinuc_config.json
+uv run streamlit run epinuc_tiff_gui.py            # -> writes epinuc_config.json
 
 # 3. Run headlessly with exactly those parameters.
-python epinuc_tiff_cli.py --config epinuc_config.json --output per_run_output
+uv run python epinuc_tiff_cli.py --config epinuc_config.json --output per_run_output
 ```
 
 The GUI and CLI share one source of truth: **`epinuc_config.json`**, written by `tl.save_config`
@@ -317,11 +317,11 @@ what you tuned is exactly what runs.
 Useful CLI flags:
 
 ```bash
-python epinuc_tiff_cli.py --list                        # inventory + the lasers in each run
-python epinuc_tiff_cli.py --runs NUC388 --lanes ch1 ch2 # subset of runs / lanes
-python epinuc_tiff_cli.py --scenes 0-3 --n-jobs 4       # FOV subset, 4 workers
-python epinuc_tiff_cli.py --no-artifact-masking         # override the saved masking flag
-python epinuc_tiff_cli.py --channel-map nucleosome=G,R_PTM=B,B_PTM=R   # override the saved map
+uv run python epinuc_tiff_cli.py --list                        # inventory + the lasers in each run
+uv run python epinuc_tiff_cli.py --runs NUC388 --lanes ch1 ch2 # subset of runs / lanes
+uv run python epinuc_tiff_cli.py --scenes 0-3 --n-jobs 4       # FOV subset, 4 workers
+uv run python epinuc_tiff_cli.py --no-artifact-masking         # override the saved masking flag
+uv run python epinuc_tiff_cli.py --channel-map nucleosome=G,R_PTM=B,B_PTM=R   # override the saved map
 ```
 
 Outputs land in `<output>/<run>/<lane>/` (the usual per-image / cumulative / event CSVs) plus
@@ -411,4 +411,4 @@ as ep`, `import epinuc_tiff_loader as tl`, `import epinuc_psf_correct as pc`.
 | `measure_psf(img, coords)` / `find_fiducials(images)` | PSF (half-light radius) and cross-channel fiducial detection, for the QC path. |
 | `parse_tif_name(name)` / `read_tif(path)` | Filename fields; `(float32 image, XMP bytes)` with SMB-dropout retry. |
 
-Run the tool from the shell with `python epinuc_psf_correct.py --help`.
+Run the tool from the shell with `uv run python epinuc_psf_correct.py --help`.
