@@ -109,7 +109,9 @@ import os
 import re
 import shutil
 import sys
+import threading
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -856,6 +858,51 @@ def _mirror_ancillary(indir: str, outdir: str, processed: set) -> int:
     return n
 
 
+def _flatfield_one(path: str, cal: Dict[str, Calib], outdir: Optional[str],
+                   dry_run: bool) -> dict:
+    """Flat-field a single file -- read, correct, write -- and return its report row.
+
+    All the state this touches is either local or read-only (``cal``), and each call writes to its
+    own output path, so several of these can run at once.  See ``run_flatfield`` for why that is
+    worth doing.
+    """
+    m = parse_tif_name(path)
+    dst = os.path.join(outdir, os.path.basename(path)) if outdir else None
+    row = {"file": os.path.basename(path), "lane": m["lane"], "pos": m["pos"],
+           "dye": m["laser"], "cycle": m["cycle"]}
+    try:
+        img, xmp = read_tif(path)
+    except OSError as e:
+        row["action"] = f"ERROR: {e}"
+        warnings.warn(f"{row['file']}: {e}")
+        return row
+
+    sat = img >= _SATURATION_LEVEL           # saturation is a RAW-sensor property
+    row["n_saturated_px"] = int(sat.sum())
+    row["saturated"] = int(row["n_saturated_px"] > 0)
+    row["focus_locked"] = xmp_field(xmp, "PsdInPosition")
+    row["attempt_number"] = xmp_field(xmp, "AttemptNumber")
+    row["z_position"] = xmp_field(xmp, "ZPosition")
+
+    c = cal.get(m["laser"])
+    if c is None:
+        row["action"] = "passthrough (no calibration for mode)"
+        if not dry_run:
+            os.makedirs(outdir, exist_ok=True)
+            shutil.copy2(path, dst)
+        return row
+
+    out = apply_flatfield(img, c)
+    row["bias_dn"] = round(c.bias, 1)
+    row["flat_valid"] = int(c.valid)
+    row["clipped_frac"] = round(float(((out < 0) | (out > 65535)).mean()), 6)
+    out = np.clip(out, 0, 65535).astype(np.uint16)
+    row["action"] = "flat-fielded"
+    if not dry_run:
+        write_tif(dst, out, xmp)
+    return row
+
+
 def run_flatfield(args, files: List[str]) -> int:
     """Flat-field the whole run (every channel) and write corrected TIFs to the mirrored tree."""
     import csv
@@ -878,47 +925,47 @@ def run_flatfield(args, files: List[str]) -> int:
         if sidecar:
             save_calibration(cal, sidecar)
 
-    rows: List[dict] = []
-    n_done = n_skip = 0
+    # Correct the files concurrently.  Each file is an independent read -> arithmetic -> write, and
+    # the read is the expensive part: the raw runs live on an SMB share, so a serial loop spends most
+    # of its wall clock blocked on the network with the CPU idle.  THREADS, not processes: the blocking
+    # calls (socket read, file write) release the GIL, as do the NumPy ops in apply_flatfield, so the
+    # work genuinely overlaps -- and threads share the per-mode flats instead of pickling a 16 MB array
+    # to every worker.  Force the lazy gain map to materialize first so the workers only ever read it.
+    for c in cal.values():
+        c.gain_map()
+
+    rows: List[Optional[dict]] = [None] * len(files)
     verb = "measuring" if args.dry_run else "correcting"
     prog = _Progress(len(files), f"  {verb} ")
-    for i, p in enumerate(files, 1):
-        m = parse_tif_name(p)
-        dst = os.path.join(args.outdir, os.path.basename(p)) if args.outdir else None
-        row = {"file": os.path.basename(p), "lane": m["lane"], "pos": m["pos"],
-               "dye": m["laser"], "cycle": m["cycle"]}
+    lock = threading.Lock()
+    n_seen = 0
+
+    def _task(item) -> None:
+        nonlocal n_seen
+        i, p = item
         try:
-            img, xmp = read_tif(p)
-        except OSError as e:
-            row["action"] = f"ERROR: {e}"
-            rows.append(row); warnings.warn(f"{row['file']}: {e}"); prog.update(i); continue
+            row = _flatfield_one(p, cal, args.outdir, args.dry_run)
+        except Exception as e:          # one bad frame must not take the whole run down
+            m = parse_tif_name(p) or {}
+            row = {"file": os.path.basename(p), "lane": m.get("lane"), "pos": m.get("pos"),
+                   "dye": m.get("laser"), "cycle": m.get("cycle"), "action": f"ERROR: {e}"}
+            warnings.warn(f"{os.path.basename(p)}: {e}")
+        rows[i] = row
+        with lock:                      # the bar is the only thing the threads share
+            n_seen += 1
+            prog.update(n_seen)
 
-        sat = img >= _SATURATION_LEVEL           # saturation is a RAW-sensor property
-        row["n_saturated_px"] = int(sat.sum())
-        row["saturated"] = int(row["n_saturated_px"] > 0)
-        row["focus_locked"] = xmp_field(xmp, "PsdInPosition")
-        row["attempt_number"] = xmp_field(xmp, "AttemptNumber")
-        row["z_position"] = xmp_field(xmp, "ZPosition")
+    jobs = max(1, int(args.jobs))
+    if jobs == 1:
+        for item in enumerate(files):
+            _task(item)
+    else:
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            list(pool.map(_task, enumerate(files)))
 
-        c = cal.get(m["laser"])
-        if c is None:
-            row["action"] = "passthrough (no calibration for mode)"
-            if not args.dry_run:
-                os.makedirs(args.outdir, exist_ok=True); shutil.copy2(p, dst)
-            n_skip += 1; rows.append(row); prog.update(i)
-            continue
-
-        out = apply_flatfield(img, c)
-        row["bias_dn"] = round(c.bias, 1)
-        row["flat_valid"] = int(c.valid)
-        row["clipped_frac"] = round(float(((out < 0) | (out > 65535)).mean()), 6)
-        out = np.clip(out, 0, 65535).astype(np.uint16)
-        row["action"] = "flat-fielded"
-        if not args.dry_run:
-            write_tif(dst, out, xmp)
-        n_done += 1
-        rows.append(row)
-        prog.update(i)
+    rows = [r for r in rows if r is not None]
+    n_done = sum(1 for r in rows if r["action"] == "flat-fielded")
+    n_skip = sum(1 for r in rows if r["action"].startswith("passthrough"))
 
     if not args.dry_run and args.outdir:
         nanc = _mirror_ancillary(args.indir, args.outdir, {os.path.basename(p) for p in files})
@@ -1014,6 +1061,10 @@ def main(argv=None) -> int:
     ap.add_argument("--flat-load", default=None,
                     help="reuse a saved calibration dir (from a prior run's <out>/_flatfield) "
                          "instead of rebuilding it -- e.g. apply one run's flat to another")
+    ap.add_argument("--jobs", type=int, default=8,
+                    help="threads used to flat-field files concurrently (default 8). The work is "
+                         "dominated by reads off the SMB share, so overlapping them is most of the "
+                         "speedup; --jobs 1 restores the old serial loop.")
     ap.add_argument("--report", default="psf_report.csv")
     ap.add_argument("--dry-run", action="store_true", help="measure and report; write no pixels")
     ap.add_argument("--measure-only", action="store_true",
